@@ -46,7 +46,7 @@ def millisToTime(millis):
 player_iface = None
 transport_prop_iface = None
 
-def load(callback):
+def load(callback, restart):
     gui_handler = generateCallback(callback)
 
     global player_iface
@@ -63,15 +63,28 @@ def load(callback):
 
             current_media = dbus.Interface(bus.get_object('org.bluez', path), 'org.freedesktop.DBus.Properties')
             current_properties = current_media.GetAll('org.bluez.MediaPlayer1')
-            print(current_properties)
             gui_handler('org.bluez.MediaPlayer1', current_properties, False)
         elif 'org.bluez.MediaTransport1' in ifaces:
             transport_prop_iface = dbus.Interface(
                     bus.get_object('org.bluez', path),
                     'org.freedesktop.DBus.Properties')
     if not player_iface:
+        bus.add_signal_receiver(
+            reload(restart),
+            bus_name='org.bluez',
+            signal_name='InterfacesAdded',
+            dbus_interface='org.freedesktop.DBus.ObjectManager'
+        )
+
+
         raise NoMediaFound('Error: Media Player not found.') 
     if not transport_prop_iface:
+        bus.add_signal_receiver(
+            reload(restart),
+            bus_name='org.bluez',
+            signal_name='InterfacesAdded',
+            dbus_interface='org.freedesktop.DBus.ObjectManager'
+        )
         raise NoTransportFound('Error: DBus.Properties iface not found.') 
     
     bus.add_signal_receiver(
@@ -80,7 +93,16 @@ def load(callback):
         signal_name='PropertiesChanged',
         dbus_interface='org.freedesktop.DBus.Properties')
 
-    ## on lit les propriété courrante du mediaplayer
+def reload(restart_callback):
+    def handler(path, objects):
+        if 'org.bluez.MediaPlayer1' in objects:
+            restart_callback()
+
+    return handler
+        
+    
+
+
 
 def generateCallback(callback):
     def handler(interface, changed, invalidated):
